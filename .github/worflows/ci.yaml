@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [ 'feature/**' ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run unit tests with coverage
+        run: |
+          pytest \
+            --cov=. \
+            --cov-report=term \
+            --cov-report=xml \
+            --cov-report=json:coverage.json \
+            --cov-report=html
+
+      - name: Publish coverage summary
+        if: success()
+        run: |
+          python <<'PYTHON_SCRIPT'
+          import json
+          import os
+
+          path = "coverage.json"
+
+          if not os.path.exists(path):
+              print("coverage.json not found")
+              raise SystemExit(0)
+
+          with open(path, "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          total = data.get("totals", {})
+
+          def fmt(value):
+              covered = value.get("covered_lines", 0)
+              num = value.get("num_statements", 0)
+              pct = value.get("percent_covered", 0)
+              return f"{pct:.2f}% ({covered}/{num})"
+
+          lines = [
+              "## Pytest coverage summary",
+              "| Metric | Coverage |",
+              "| --- | --- |",
+              f"| Lines | {fmt(total)} |",
+          ]
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write("\n".join(lines) + "\n")
+          PYTHON_SCRIPT
+
+      - name: Upload coverage report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            htmlcov
+            coverage.xml
+            coverage.json
