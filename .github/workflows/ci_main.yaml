@@ -1,0 +1,89 @@
+name: Promote develop to main
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  create-release-pr:
+    # Solo cuando el PR revisado apunta a develop y fue aprobado
+    if: >
+      github.event.review.state == 'approved' &&
+      github.event.pull_request.base.ref == 'develop' &&
+      github.event.pull_request.state == 'open'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create or update PR develop -> main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_PR: ${{ github.event.pull_request.number }}
+          SOURCE_TITLE: ${{ github.event.pull_request.title }}
+          SOURCE_URL: ${{ github.event.pull_request.html_url }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          REVIEWER: ${{ github.event.review.user.login }}
+        run: |
+          HEAD_BRANCH="develop"
+          BASE_BRANCH="main"
+
+          BODY=$(cat <<EOF
+          ## Promote develop to main
+
+          PR automático generado después de la aprobación de un Pull Request hacia \`develop\`.
+
+          ### Origen aprobado
+
+          | Campo | Valor |
+          |---|---|
+          | PR origen | #${SOURCE_PR} |
+          | Título | ${SOURCE_TITLE} |
+          | Autor | ${AUTHOR} |
+          | Aprobado por | ${REVIEWER} |
+          | Enlace | ${SOURCE_URL} |
+
+          ### Objetivo
+
+          Promover los cambios actualmente integrados en \`develop\` hacia \`main\`.
+
+          ### Checklist de pruebas manuales (ambiente develop)
+          - [ ] APIs respondiendo correctamente
+          - [ ] Sin errores en consola del navegador
+          - [ ] Datos críticos correctos
+          - [ ] Sin regresiones conocidas
+          - [ ] Aprobación funcional del negocio (si aplica)
+
+          ### Checklist de release
+
+          - [ ] Versionado confirmado
+          - [ ] Riesgos identificados
+          - [ ] Listo para merge a \`main\`
+
+          EOF
+          )
+
+          EXISTING_PR=$(gh pr list \
+            --head "$HEAD_BRANCH" \
+            --base "$BASE_BRANCH" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -z "$EXISTING_PR" ]; then
+            echo "No existing PR found. Creating develop -> main PR..."
+            gh pr create \
+              --base "$BASE_BRANCH" \
+              --head "$HEAD_BRANCH" \
+              --title "release: promote develop to main" \
+              --body "$BODY"
+          else
+            echo "PR #$EXISTING_PR already exists. Updating body..."
+            gh pr edit "$EXISTING_PR" --body "$BODY"
+          fi
