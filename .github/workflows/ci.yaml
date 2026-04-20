@@ -8,6 +8,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    outputs:
+      coverage_lines: ${{ steps.coverage.outputs.lines }}
+      tests_status: ${{ steps.tests.outputs.status }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,6 +28,7 @@ jobs:
           pip install pytest pytest-cov
 
       - name: Run unit tests with coverage
+        id: tests
         run: |
           pytest \
             --cov=. \
@@ -32,7 +37,10 @@ jobs:
             --cov-report=json:coverage.json \
             --cov-report=html
 
+          echo "status=Passed" >> $GITHUB_OUTPUT
+
       - name: Publish coverage summary
+        id: coverage
         if: success()
         run: |
           python <<'PYTHON_SCRIPT'
@@ -43,28 +51,28 @@ jobs:
 
           if not os.path.exists(path):
               print("coverage.json not found")
-              raise SystemExit(0)
+              raise SystemExit(1)
 
           with open(path, "r", encoding="utf-8") as f:
               data = json.load(f)
 
           total = data.get("totals", {})
+          covered = total.get("covered_lines", 0)
+          num = total.get("num_statements", 0)
+          pct = total.get("percent_covered", 0)
 
-          def fmt(value):
-              covered = value.get("covered_lines", 0)
-              num = value.get("num_statements", 0)
-              pct = value.get("percent_covered", 0)
-              return f"{pct:.2f}% ({covered}/{num})"
-
-          lines = [
+          summary = [
               "## Pytest coverage summary",
               "| Metric | Coverage |",
               "| --- | --- |",
-              f"| Lines | {fmt(total)} |",
+              f"| Lines | {pct:.2f}% ({covered}/{num}) |",
           ]
 
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
-              f.write("\n".join(lines) + "\n")
+              f.write("\n".join(summary) + "\n")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"lines={pct:.2f}% ({covered}/{num})\n")
           PYTHON_SCRIPT
 
       - name: Upload coverage report
@@ -76,3 +84,63 @@ jobs:
             htmlcov
             coverage.xml
             coverage.json
+
+  create-pr:
+    runs-on: ubuntu-latest
+    needs: test
+
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create or Update Pull Request to develop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERAGE: ${{ needs.test.outputs.coverage_lines }}
+          STATUS: ${{ needs.test.outputs.tests_status }}
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"
+          FEATURE_NAME="${BRANCH#feature/}"
+          SHORT_SHA="${GITHUB_SHA::8}"
+
+          BODY=$(cat <<EOF
+          ## ${FEATURE_NAME}
+
+          Pull Request automático generado después de pruebas exitosas.
+
+          ### Resultado de pruebas
+
+          | Campo | Valor |
+          |---|---|
+          | Estado | ${STATUS} |
+          | Coverage | ${COVERAGE} |
+          | Branch | \`${BRANCH}\` |
+          | Commit | \`${SHORT_SHA}\` |
+
+          ### Checklist
+          - [ ] Revisado funcionalmente
+          - [ ] Sin regresiones
+          - [ ] Listo para merge a \`develop\`
+          EOF
+          )
+
+          PR_NUMBER=$(gh pr list \
+            --head "$BRANCH" \
+            --base develop \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -z "$PR_NUMBER" ]; then
+            gh pr create \
+              --title "feat: ${FEATURE_NAME}" \
+              --body "$BODY" \
+              --base develop \
+              --head "$BRANCH"
+          else
+            gh pr edit "$PR_NUMBER" --body "$BODY"
+          fi
