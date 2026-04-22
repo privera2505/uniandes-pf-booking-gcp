@@ -50,9 +50,13 @@ def book_room(request: BookingRequest, repo: BookingRepositoryPort = Depends(rep
         raise HTTPException(422, "NumGuest supera maxGuest")
 
 @router.get("/reviews_hotel", response_model=list[Resena], status_code=200)
-def reviews_hotel(request: ReviewsRequest, repo: BookingRepositoryPort = Depends(repo_dep)):
+def reviews_hotel(hotelId: str, repo: BookingRepositoryPort = Depends(repo_dep)):
     try:
-        query = repo.reviews_hotel(request.hotelId)
+        query = repo.reviews_hotel(hotelId)
         return query
     except: 
         pass
+
+@router.get("/ping")
+def health_check():
+    return "pong"
