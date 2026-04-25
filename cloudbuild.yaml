@@ -1,0 +1,156 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  #0. unit test
+  - name: "python:3.13" #Cambiar al lenguaje de programacion que se usa
+    id: "run-unit-tests"
+    entrypoint: bash
+    args:
+    - -c
+    - |
+        echo "Instalando dependencias..."
+        pip install -r requirements.txt
+
+        echo "Ejecutando pruebas unitarias..."
+        pytest
+
+  # 1. Build
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/${_CONTAINER_NAME}:$SHORT_SHA
+      - .
+
+  # 2. Push
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/${_CONTAINER_NAME}:$SHORT_SHA
+
+  # 3. Crear service.yaml
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        echo "Instalando jq..."
+        apt-get update && apt-get install -y jq
+
+        echo "Convirtiendo ENV_VARS..."
+
+        ENV_VARS_YAML=$$(echo '${_ENV_VARS}' | jq -r '
+          to_entries
+          | map("            - name: \(.key)\n              value: \"\(.value)\"")
+          | join("\n")
+        ')
+
+        echo "===== ENV VARS ====="
+        echo "$$ENV_VARS_YAML"
+
+        cat <<EOF > service.yaml
+        apiVersion: serving.knative.dev/v1
+        kind: Service
+        metadata:
+          name: ${_SERVICE_NAME}
+          annotations:
+            run.googleapis.com/ingress: ${_INGRESS_TYPE}
+        spec:
+          template:
+            metadata:
+              annotations:
+                run.googleapis.com/network-interfaces: '[{"network":"${_VPC_NAME}","subnetwork":"${_SUBNET_NAME}"}]'
+                run.googleapis.com/vpc-access-egress: private-ranges-only
+            spec:
+              containers:
+                - image: containerurl
+                  ports:
+                    - containerPort: ${_CONTAINER_PORT}
+                  env:
+        $$ENV_VARS_YAML 
+        EOF
+
+        echo "===== VERIFICANDO SERVICE.YAML ====="
+        cat service.yaml
+
+  # 4. Crear skaffold.yaml con URL COMPLETA
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        cat <<'EOF' > skaffold.yaml
+        apiVersion: skaffold/v4beta7
+        kind: Config
+        build:
+          artifacts: 
+            - image: containerurl
+              context: .
+              docker:
+                dockerfile: Dockerfile
+          tagPolicy:
+            gitCommit: {}
+        manifests:
+          rawYaml:
+            - service.yaml
+        deploy:
+          cloudrun: {}
+        verify:
+          - name: smoke-test
+            container:
+              name: smoke-test
+              image: google/cloud-sdk:alpine
+              command: ["sh"]
+              args:
+                - "-c"
+                - |                  
+                  echo "Esperando 2 minutos antes de iniciar las pruebas..."
+                  sleep 60
+
+                  LAST_REVISION=$$(gcloud run revisions list \
+                    --service=${_SERVICE_NAME} \
+                    --region=${_REGION} \
+                    --sort-by="~creationTimestamp" \
+                    --limit=2 \
+                    --format="value(REVISION)" | tail -n 1)
+                  
+                  echo "$$LAST_REVISION"
+
+                  FAILURES=0
+
+                  for i in $(seq 1 100); do
+                    HTTP_CODE=$$(curl -s -o /dev/null -w '%{http_code}' "${_LOAD_BALANCER}/${_HEALTH_CHECK}")
+
+                    if [ "$$HTTP_CODE" != "200" ]; then
+                      FAILURES=$$((FAILURES + 1))
+                      echo "Fallo en intento $i (status: $$HTTP_CODE)"
+                    fi
+                    done
+
+                    echo "Total fallos: $$FAILURES"
+
+                    if [ "$$FAILURES" -gt 5 ]; then
+                      echo "Health check falló"
+                      exit 1
+                    fi
+
+                    echo "Health check pasado"
+            timeout: 300
+        EOF
+
+        echo "===== VERIFICANDO SKAFFOLD.YAML ====="
+        cat skaffold.yaml
+
+  # 5. Crear release uniendo todo
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - deploy
+      - releases
+      - create
+      - release-${SHORT_SHA}
+      - --delivery-pipeline=${_PIPELINE_NAME}
+      - --region=${_REGION}
+      - --source=.
+      - --images=containerurl=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/${_CONTAINER_NAME}:$SHORT_SHA
