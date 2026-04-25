@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from datetime import date
 
 from domain.models.models import Reserva, BookingRequest, ReviewsRequest, Resena
@@ -60,3 +60,11 @@ def reviews_hotel(hotelId: str, repo: BookingRepositoryPort = Depends(repo_dep))
 @router.get("/ping")
 def health_check():
     return "pong"
+
+@router.post("/debug_header")
+def debug_header(request: Request):
+    return {
+        "headers": dict(
+            request.headers
+        )
+    }
