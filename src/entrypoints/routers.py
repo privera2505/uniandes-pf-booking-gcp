@@ -67,11 +67,11 @@ def reviews_hotel(hotelId: str, repo: BookingRepositoryPort = Depends(repo_dep))
 @router.get("/ping")
 def health_check():
     return "pong"
-
-@router.post("/debug_header")
-def debug_header(request: Request):
-    return {
-        "headers": dict(
-            request.headers
-        )
-    }
+#
+#@router.post("/debug_header")
+#def debug_header(request: Request):
+#    return {
+#        "headers": dict(
+#            request.headers
+#        )
+#    }
