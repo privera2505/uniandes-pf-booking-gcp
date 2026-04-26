@@ -4,8 +4,8 @@ from uuid import uuid4
 
 from domain.models.models import Resena, Tarifa, Reserva, Habitacion
 from domain.ports.booking_repository_port import BookingRepositoryPort
-from error import RateNotAvailableException, RoomAlreadyBooked, RoomNotExist, UserNotExist, MaxGuestsExceededException
-
+from error import RateNotAvailableException, ReservationDuplicated, RoomAlreadyBooked, RoomNotExist, UserNotExist, MaxGuestsExceededException
+from utils.reservation_code import generate_reservation_code
 
 class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
     def __init__(self) -> None:
@@ -112,7 +112,7 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
         }
 
         self._viajero: Dict[str, dict] = {
-            "44444444-4444-4444-4444-000000000001": {
+            "17a4ed9d-f7f9-4862-890a-5ff9d736334f": {
                 "test": "test"
             },
             "44444444-4444-4444-4444-000000000002": {
@@ -122,12 +122,17 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
 
     def booking_room(self, habitacionId: str, viajeroId: str, checkin: date,  checkout: date, numHuespedes: int) -> Reserva:
         noches = (checkout - checkin).days
+
         #Validar existencia de habitacion
         if habitacionId not in self._habitacion:
             raise RoomNotExist()
-        #Validad existecion de usuario
-        if viajeroId not in self._viajero:
-            raise UserNotExist()
+        
+        codigo = generate_reservation_code(viajeroId, habitacionId, checkin, checkout)
+
+        for reserva in self._reserva.values():
+            if reserva["codigo"] == codigo:
+                raise ReservationDuplicated()
+
         #Validar que no hay reservas creadas
         for reserva in self._reserva.values():
             if reserva["habitacionId"] == habitacionId and reserva["estado"] == "CONFIRMADA":
@@ -168,7 +173,7 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
         #Crear reserva
         nueva_reserva: Reserva = {
             "id": str(uuid4()),
-            "codigo": "Codigo123",
+            "codigo": codigo,
             "viajeroId": viajeroId,
             "habitacionId": habitacionId,
             "fechaCheckIn": checkin,
@@ -180,6 +185,9 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
             "total": subtotal + impuesto,
             "moneda": tarifa_encontrada["moneda"]
         }
+
+        # Guardar en memoria
+        self._reserva[nueva_reserva["id"]] = nueva_reserva
 
         return nueva_reserva
 

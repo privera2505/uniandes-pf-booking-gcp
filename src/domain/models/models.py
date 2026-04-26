@@ -48,7 +48,6 @@ class Habitacion(BaseModel):
 
 class BookingRequest(BaseModel):
     habitacionId: str
-    viajeroId: str
     checkin: datetime
     checkout: datetime
     numHuespedes: int
