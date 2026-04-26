@@ -24,3 +24,8 @@ class MaxGuestsExceededException(Exception):
 
 class RateNotAvailableException(Exception):
     """Exception raise when the rate is not available"""
+    pass
+
+class ReservationDuplicated(Exception):
+    """Exception raise when the Revation was duplicated"""
+    pass
