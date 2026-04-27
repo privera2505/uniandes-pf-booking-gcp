@@ -3,7 +3,7 @@ from adapters.postgres.declarative_base import db1
 from domain.ports.booking_repository_port import BookingRepositoryPort
 from domain.models.models import Reserva, Resena, VerReservas
 
-from sqlalchemy import and_, func, select, exists, or_
+from sqlalchemy import and_, func, select, exists, or_, cast, String
 
 from math import ceil
 
@@ -172,7 +172,7 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                 .filter(
                     or_(
                         ReservaSQL.viajeroId == id_filter,
-                        Hotel.id == id_filter
+                        cast(Hotel.id, String) == id_filter
                     )
                 )
                 .all()
