@@ -16,7 +16,7 @@ from error import (
     )
 
 from entrypoints.assembly import build_booking_repository
-from utils.decode import get_current_user_id
+from utils.decode import get_current_user_id, get_id_filter
 
 
 def repo_dep() -> BookingRepositoryPort:
@@ -61,8 +61,16 @@ def reviews_hotel(hotelId: str, repo: BookingRepositoryPort = Depends(repo_dep))
     try:
         query = repo.reviews_hotel(hotelId)
         return query
-    except: 
-        pass
+    except Exception:
+        raise HTTPException(500, "Servicio caido")
+
+@router.get("/get_bookings")
+def get_bookings(id_filter: str = Depends(get_id_filter), repo: BookingRepositoryPort = Depends(repo_dep)):
+    try:
+        bookings = repo.get_bookings(id_filter)
+        return bookings
+    except Exception:
+        raise HTTPException(500, "Servicio caido")
 
 @router.get("/ping")
 def health_check():

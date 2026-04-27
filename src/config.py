@@ -1,6 +1,6 @@
 from os import getenv
 
-REPOSITORY_IMPL = getenv("REPOSITORY_IMPL", "postgres")
+REPOSITORY_IMPL = getenv("REPOSITORY_IMPL", "memory")
 APP_HOST = getenv("APP_HOST", "0.0.0.0")
 APP_PORT = getenv("APP_PORT", "8000")
 INSTANCE_CONNECTION_NAME = getenv("INSTANCE_CONNECTION_NAME","secret-lambda-491419-p2:us-central1:test-search-services")

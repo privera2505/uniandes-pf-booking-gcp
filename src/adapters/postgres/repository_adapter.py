@@ -1,13 +1,13 @@
 from adapters.postgres.models.models import Base
 from adapters.postgres.declarative_base import db1
 from domain.ports.booking_repository_port import BookingRepositoryPort
-from domain.models.models import Reserva, Resena
+from domain.models.models import Reserva, Resena, VerReservas
 
-from sqlalchemy import and_, func, select, exists
+from sqlalchemy import and_, func, select, exists, or_
 
 from math import ceil
 
-from adapters.postgres.models.models import Habitacion, Reserva as ReservaSQL, Tarifa, Resena as ResenaSQL
+from adapters.postgres.models.models import Habitacion, Reserva as ReservaSQL, Tarifa, Resena as ResenaSQL, Hotel, User
 from error import MaxGuestsExceededException, RateNotAvailableException, ReservationDuplicated, RoomAlreadyBooked, RoomNotExist
 from utils.to_utc import to_utc
 from utils.reservation_code import generate_reservation_code
@@ -145,4 +145,72 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                 ]
         finally:
             db.close()
+    
+    def get_bookings(self, id_filter):
+        db = db1.get_session()
 
+        try:
+            rows = (
+                db.query(
+                    ReservaSQL,
+                    Habitacion,
+                    Hotel,
+                    User.name.label("nombre_user")
+                )
+                .join(
+                    Habitacion,
+                    Habitacion.id == ReservaSQL.habitacionId
+                )
+                .join(
+                    Hotel,
+                    Hotel.id == Habitacion.hotelId
+                )
+                .outerjoin(
+                    User,
+                    User.id == ReservaSQL.viajeroId
+                )
+                .filter(
+                    or_(
+                        ReservaSQL.viajeroId == id_filter,
+                        Hotel.id == id_filter
+                    )
+                )
+                .all()
+            )
+
+            return [
+                VerReservas(
+                    id=reserva.id,
+                    nombreUser=nombre_user or "Sin nombre",
+                    descripcion=habitacion.descripcion,
+                    numHuespedes=reserva.numHuespedes,
+                    fechaCheckIn=reserva.fechaCheckIn,
+                    fechaCheckOut=reserva.fechaCheckOut,
+                    estado=reserva.estado,
+                    subtotal=reserva.subtotal,
+                    impuestos=reserva.impuestos,
+                    total=reserva.total,
+
+                    nombreHotel=hotel.nombre,
+                    direccion=hotel.direccion,
+                    ciudad=hotel.ciudad,
+                    pais=hotel.pais,
+                    latitud=hotel.latitud,
+                    longitud=hotel.longitud,
+                    estrellas=hotel.estrellas,
+                    distancia=hotel.distancia,
+                    acceso=hotel.acceso,
+
+                    tipo=habitacion.tipo,
+                    categoria=habitacion.categoria,
+                    imagenes=habitacion.imagenes,
+                    tipo_habitacion=habitacion.tipo_habitacion,
+                    tipo_cama=habitacion.tipo_cama,
+                    tamano_habitacion=habitacion.tamano_habitacion,
+                    amenidades=habitacion.amenidades
+                )
+                for reserva, habitacion, hotel, nombre_user in rows
+            ]
+
+        finally:
+            db.close()
