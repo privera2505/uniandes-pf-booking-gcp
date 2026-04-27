@@ -163,7 +163,7 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                 )
                 .join(
                     Hotel,
-                    Hotel.id == Habitacion.hotelId
+                    cast(Hotel.id, String) == Habitacion.hotelId
                 )
                 .outerjoin(
                     User,
