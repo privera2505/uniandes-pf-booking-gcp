@@ -2,13 +2,44 @@ from typing import Dict
 from datetime import date, datetime
 from uuid import uuid4
 
-from domain.models.models import Resena, Tarifa, Reserva, Habitacion
+from domain.models.models import Resena, Tarifa, Reserva, Habitacion, Hotel, VerReservas
 from domain.ports.booking_repository_port import BookingRepositoryPort
 from error import RateNotAvailableException, ReservationDuplicated, RoomAlreadyBooked, RoomNotExist, UserNotExist, MaxGuestsExceededException
 from utils.reservation_code import generate_reservation_code
 
 class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
     def __init__(self) -> None:
+        self._hotel: Dict[str, Hotel] = {
+            "11111111-1111-1111-1111-000000000011": {
+                "id": "11111111-1111-1111-1111-000000000011",
+                "nombre": "Hotel del canto",
+                "direccion": "Calle 123",
+                "ciudad": "Madrid",
+                "pais": "Spain",
+                "latitud": 50.0755,
+                "longitud": 14.4378,
+                "estrellas": 5,
+                "pmsProveedor": "Opera",
+                "activo": True,
+                "distancia": "3 km del centro",
+                "acceso": "Metro"
+            },
+            "11111111-1111-1111-1111-000000000002": {
+                "id": "11111111-1111-1111-1111-000000000002",
+                "nombre": "Hotel del pesao",
+                "direccion": "Gran Via 45",
+                "ciudad": "Madrid",
+                "pais": "Spain",
+                "latitud": 40.4168,
+                "longitud": -3.7038,
+                "estrellas": 4,
+                "pmsProveedor": "Fidelio",
+                "activo": True,
+                "distancia": "3 km del centro",
+                "acceso": "Metro"
+            }
+        }
+
         self._reserva: Dict[str, Reserva] = {
             "33333333-3333-3333-3333-000000000001": {
                 "id": "33333333-3333-3333-3333-000000000001",
@@ -81,7 +112,6 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
                 "verificada": True
             }
         }
-
         self._habitacion: Dict[str, Habitacion] = {
             "22222222-2222-2222-2222-000000000001": {
                 "id": "22222222-2222-2222-2222-000000000001",
@@ -113,10 +143,10 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
 
         self._viajero: Dict[str, dict] = {
             "17a4ed9d-f7f9-4862-890a-5ff9d736334f": {
-                "test": "test"
+                "nombre": "test-1"
             },
             "44444444-4444-4444-4444-000000000002": {
-                "test": "test"
+                "nombre": "test-1"
             }
         }
 
@@ -188,6 +218,7 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
 
         # Guardar en memoria
         self._reserva[nueva_reserva["id"]] = nueva_reserva
+        print(self._reserva)
 
         return nueva_reserva
 
@@ -197,3 +228,63 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
             if resena["hotelId"] == hotelId:
                 reviews_for_hotel.append(resena)
         return reviews_for_hotel
+    
+    def get_bookings(self, id_filter) -> list[VerReservas]:
+        print(self._reserva)
+        resultado = []
+        for reserva in self._reserva.values():
+
+            habitacion = self._habitacion.get(reserva["habitacionId"])
+            if not habitacion:
+                continue
+
+            hotel = self._hotel.get(habitacion["hotelId"])
+            if not hotel:
+                continue
+
+            # filtro por viajero o por hotel
+            if (
+                reserva["viajeroId"] != id_filter
+                and hotel["id"] != id_filter
+            ):
+                continue
+
+            viajero = self._viajero.get(
+                reserva["viajeroId"],
+                {"nombre": "Sin nombre"}
+            )
+
+            item = VerReservas(
+                id=reserva["id"],
+                nombreUser=viajero["nombre"],
+                descripcion=habitacion["descripcion"],
+                numHuespedes=reserva["numHuespedes"],
+                fechaCheckIn=reserva["fechaCheckIn"],
+                fechaCheckOut=reserva["fechaCheckOut"],
+                estado=reserva["estado"],
+                subtotal=reserva["subtotal"],
+                impuestos=reserva["impuestos"],
+                total=reserva["total"],
+
+                nombreHotel=hotel["nombre"],
+                direccion=hotel["direccion"],
+                ciudad=hotel["ciudad"],
+                pais=hotel["pais"],
+                latitud=hotel["latitud"],
+                longitud=hotel["longitud"],
+                estrellas=hotel["estrellas"],
+                distancia=hotel["distancia"],
+                acceso=hotel["acceso"],
+
+                tipo=habitacion["tipo"],
+                categoria=habitacion["categoria"],
+                imagenes=habitacion["imagenes"],
+                tipo_habitacion=habitacion["tipo_habitacion"],
+                tipo_cama=habitacion["tipo_cama"],
+                tamano_habitacion=habitacion["tamano_habitacion"],
+                amenidades=habitacion["amenidades"]
+            )
+
+            resultado.append(item)
+
+        return resultado

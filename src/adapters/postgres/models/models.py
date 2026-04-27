@@ -2,10 +2,33 @@ import uuid
 
 from datetime import datetime, timezone
 
+from sqlalchemy.dialects.postgresql import UUID
+
 from sqlalchemy import Column, DateTime, String, Float, Integer, Boolean, ForeignKey, JSON, Index
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
+
+class Hotel(Base):
+    __tablename__ = "hotel"
+    __mapper_args__ = {"confirm_deleted_rows": False}
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    nombre = Column(String, nullable=False)
+    direccion = Column(String, nullable=False)
+    ciudad = Column(String, nullable=False)
+    pais = Column(String, nullable=False)
+    latitud = Column(Float, nullable=False)
+    longitud = Column(Float, nullable=False)
+    estrellas = Column(Integer, nullable=False)
+    pmsProveedor = Column(String, nullable=False)
+    activo = Column(Boolean, nullable=False)
+    distancia = Column(String, nullable=False)
+    acceso = Column(String, nullable=False)
+
+    __table_args__ = (
+        Index("idx_hotel_ciudad_activo", "ciudad", "activo"),
+    )
 
 class Reserva(Base):
     __tablename__ = "reserva"
@@ -80,3 +103,9 @@ class Habitacion(Base):
     __table_args__ = (
         Index("idx_habitacion_hotel", "hotelId"),
     )
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(UUID(as_uuid=False), primary_key=True)
+    nombre = Column(String, nullable=False)

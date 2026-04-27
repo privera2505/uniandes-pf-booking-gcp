@@ -16,6 +16,52 @@ class Reserva(BaseModel):
     total: float
     moneda: str
 
+class Hotel(BaseModel):
+    id: str | None = None
+    nombre: str
+    direccion: str
+    ciudad: str
+    pais: str
+    latitud: float
+    longitud: float
+    estrellas: int
+    pmsProveedor: str
+    activo: bool
+    distancia: str
+    acceso: str
+
+class VerReservas(BaseModel):
+    id: str
+    nombreUser:str
+    descripcion: str
+    numHuespedes: int
+    fechaCheckIn: datetime
+    fechaCheckOut: datetime
+    estado: str
+    nombreHotel: str
+    direccion: str
+    ciudad: str
+    pais: str
+    latitud: float
+    longitud: float
+    estrellas: int
+    distancia: str
+    acceso: str
+    tipo: str
+    categoria: str    
+    imagenes: list[str]
+    tipo_habitacion: str
+    tipo_cama: list[str]
+    tamano_habitacion: str
+    amenidades: list[str]
+    subtotal: float
+    impuestos: float
+    total: float
+
+class Users(BaseModel):
+    id: str
+    nombre: str
+
 class Resena(BaseModel):
     id: str | None = None
     viajeroId: str
