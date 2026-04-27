@@ -108,4 +108,4 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=False), primary_key=True)
-    name = Column(String, nullable=False)
+    nombre = Column(String, nullable=False)

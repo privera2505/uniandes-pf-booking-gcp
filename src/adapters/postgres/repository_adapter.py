@@ -156,7 +156,7 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                     ReservaSQL,
                     Habitacion,
                     Hotel,
-                    User.name.label("nombre_user")
+                    User.nombre.label("nombre_user")
                 )
                 .join(
                     Habitacion,
@@ -164,16 +164,16 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                 )
                 .join(
                     Hotel,
-                    Hotel.id == cast(Habitacion.hotelId, UUID)
+                    Hotel.id == Habitacion.hotelId
                 )
                 .outerjoin(
                     User,
-                    User.id == ReservaSQL.viajeroId
+                    User.id == cast(ReservaSQL.viajeroId,UUID)
                 )
                 .filter(
                     or_(
                         ReservaSQL.viajeroId == id_filter,
-                        Hotel.id == cast(id_filter, UUID)
+                        Hotel.id == id_filter
                     )
                 )
                 .all()
