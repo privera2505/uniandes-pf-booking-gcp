@@ -159,3 +159,4 @@ def test_reviews_hotel_no_parrams(client: client):
         "/api/v1/booking/reviews_hotel"
     )
     assert get.status_code == 422
+
