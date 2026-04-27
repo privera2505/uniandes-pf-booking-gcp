@@ -69,8 +69,11 @@ def get_bookings(id_filter: str = Depends(get_id_filter), repo: BookingRepositor
     try:
         bookings = repo.get_bookings(id_filter)
         return bookings
-    except Exception:
-        raise HTTPException(500, "Servicio caido")
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Servicio caido: {str(e)}"
+        )
 
 @router.get("/ping")
 def health_check():
