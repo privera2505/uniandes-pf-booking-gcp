@@ -2,6 +2,8 @@ import uuid
 
 from datetime import datetime, timezone
 
+from sqlalchemy.dialects.postgresql import UUID
+
 from sqlalchemy import Column, DateTime, String, Float, Integer, Boolean, ForeignKey, JSON, Index
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -105,5 +107,5 @@ class Habitacion(Base):
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(String(36), primary_key=True)
+    id = Column(UUID(as_uuid=False), primary_key=True)
     name = Column(String, nullable=False)

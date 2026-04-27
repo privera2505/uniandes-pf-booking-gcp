@@ -4,6 +4,7 @@ from domain.ports.booking_repository_port import BookingRepositoryPort
 from domain.models.models import Reserva, Resena, VerReservas
 
 from sqlalchemy import and_, func, select, exists, or_, cast, String
+from sqlalchemy.dialects.postgresql import UUID
 
 from math import ceil
 
@@ -163,7 +164,7 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                 )
                 .join(
                     Hotel,
-                    cast(Hotel.id, String) == Habitacion.hotelId
+                    Hotel.id == cast(Habitacion.hotelId, UUID)
                 )
                 .outerjoin(
                     User,
@@ -172,7 +173,7 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                 .filter(
                     or_(
                         ReservaSQL.viajeroId == id_filter,
-                        cast(Hotel.id, String) == id_filter
+                        Hotel.id == cast(id_filter, UUID)
                     )
                 )
                 .all()
