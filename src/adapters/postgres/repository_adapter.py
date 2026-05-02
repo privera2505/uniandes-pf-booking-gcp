@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from math import ceil
 
 from adapters.postgres.models.models import Habitacion, Reserva as ReservaSQL, Tarifa, Resena as ResenaSQL, Hotel, User
-from error import MaxGuestsExceededException, RateNotAvailableException, ReservationDuplicated, RoomAlreadyBooked, RoomNotExist
+from error import BookingNotExist, MaxGuestsExceededException, NotAuthorized, RateNotAvailableException, ReservationDuplicated, RoomAlreadyBooked, RoomNotExist
 from utils.to_utc import to_utc
 from utils.reservation_code import generate_reservation_code
 
@@ -147,16 +147,25 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
         finally:
             db.close()
     
-    def get_bookings(self, id_filter):
+    def get_bookings(
+            self,
+            id_filter,
+            name=None,
+            bookingId=None,
+            email=None,
+            status=None,
+            checkin=None,
+            checkout=None):
         db = db1.get_session()
 
         try:
-            rows = (
+            query = (
                 db.query(
                     ReservaSQL,
                     Habitacion,
                     Hotel,
-                    User.nombre.label("nombre_user")
+                    User.nombre.label("nombre_user"),
+                    User.email.label("email_user")
                 )
                 .join(
                     Habitacion,
@@ -170,18 +179,42 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                     User,
                     User.id == cast(ReservaSQL.viajeroId,UUID)
                 )
-                .filter(
-                    or_(
-                        ReservaSQL.viajeroId == id_filter,
-                        Hotel.id == id_filter
-                    )
-                )
-                .all()
             )
+
+            # Filtro de seguridad siempre primero
+            query = query.filter(
+                or_(
+                    ReservaSQL.viajeroId == id_filter,
+                    Hotel.id == id_filter
+                )
+            )
+
+            # Filtros adicionales (Opcionales)
+
+            if bookingId:
+                query = query.filter(ReservaSQL.id == bookingId)
+
+            if name:
+                query = query.filter(User.nombre.ilike(f"%{name}%"))
+
+            if email:
+                query = query.filter(User.email == email)
+
+            if status:
+                query = query.filter(ReservaSQL.estado == status.upper())
+
+            if checkin:
+                query = query.filter(ReservaSQL.fechaCheckIn == checkin)
+
+            if checkout:
+                query = query.filter(ReservaSQL.fechaCheckOut == checkout)
+
+            rows = query.all()
 
             return [
                 VerReservas(
                     id=reserva.id,
+                    habitacionId=reserva.habitacionId,
                     nombreUser=nombre_user or "Sin nombre",
                     descripcion=habitacion.descripcion,
                     numHuespedes=reserva.numHuespedes,
@@ -210,8 +243,64 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                     tamano_habitacion=habitacion.tamano_habitacion,
                     amenidades=habitacion.amenidades
                 )
-                for reserva, habitacion, hotel, nombre_user in rows
+                for reserva, habitacion, hotel, nombre_user, _ in rows
             ]
 
+        finally:
+            db.close()
+
+    def update_booking_status(self, bookingId, status, hotelId) -> Reserva:
+        db = db1.get_session()
+
+        try:
+            # 1. Buscar reserva
+            reserva = (
+                db.query(ReservaSQL)
+                .filter(ReservaSQL.id == bookingId)
+                .first()
+            )
+
+            if not reserva:
+                raise BookingNotExist()
+
+            # 2. Buscar habitación
+            habitacion = (
+                db.query(Habitacion)
+                .filter(Habitacion.id == reserva.habitacionId)
+                .first()
+            )
+
+            if not habitacion:
+                raise RoomNotExist()
+
+            # 3. Validar que pertenece al hotel
+            if habitacion.hotelId != hotelId:
+                raise NotAuthorized()
+
+            # 5. Actualizar estado
+            reserva.estado = status.upper()
+
+            db.commit()
+            db.refresh(reserva)
+
+            # 6. Mapear a modelo de dominio
+            return Reserva(
+                id=reserva.id,
+                codigo=reserva.codigo,
+                viajeroId=reserva.viajeroId,
+                habitacionId=reserva.habitacionId,
+                fechaCheckIn=reserva.fechaCheckIn,
+                fechaCheckOut=reserva.fechaCheckOut,
+                numHuespedes=reserva.numHuespedes,
+                estado=reserva.estado,
+                subtotal=reserva.subtotal,
+                impuestos=reserva.impuestos,
+                total=reserva.total,
+                moneda=reserva.moneda
+            )
+
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()

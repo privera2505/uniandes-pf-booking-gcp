@@ -32,6 +32,7 @@ class Hotel(BaseModel):
 
 class VerReservas(BaseModel):
     id: str
+    habitacionId: str
     nombreUser:str
     descripcion: str
     numHuespedes: int
@@ -61,6 +62,7 @@ class VerReservas(BaseModel):
 class Users(BaseModel):
     id: str
     nombre: str
+    email: str
 
 class Resena(BaseModel):
     id: str | None = None
@@ -100,3 +102,6 @@ class BookingRequest(BaseModel):
 
 class ReviewsRequest(BaseModel):
     hotelId: str
+
+class UpdateBookingStatusRequest(BaseModel):
+    status: str

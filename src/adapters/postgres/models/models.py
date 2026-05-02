@@ -109,3 +109,4 @@ class User(Base):
 
     id = Column(UUID(as_uuid=False), primary_key=True)
     nombre = Column(String, nullable=False)
+    email = Column(String, nullable=False)

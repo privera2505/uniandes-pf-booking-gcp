@@ -1,13 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from datetime import date
 
-from domain.models.models import Reserva, BookingRequest, ReviewsRequest, Resena
+from typing import Optional
+
+from domain.models.models import Reserva, BookingRequest, ReviewsRequest, Resena, UpdateBookingStatusRequest
 from domain.ports.booking_repository_port import BookingRepositoryPort
 
 from error import (
+    BookingNotExist,
     InvalidDateRangeException,
     BookingDateValidationException,
     MaxGuestsExceededException,
+    NotAuthorized,
     RateNotAvailableException,
     ReservationDuplicated,
     RoomAlreadyBooked,
@@ -16,7 +20,7 @@ from error import (
     )
 
 from entrypoints.assembly import build_booking_repository
-from utils.decode import get_current_user_id, get_id_filter
+from utils.decode import get_current_user_id, get_id_filter, get_current_hotel_id
 
 
 def repo_dep() -> BookingRepositoryPort:
@@ -65,9 +69,18 @@ def reviews_hotel(hotelId: str, repo: BookingRepositoryPort = Depends(repo_dep))
         raise HTTPException(500, "Servicio caido")
 
 @router.get("/get_bookings")
-def get_bookings(id_filter: str = Depends(get_id_filter), repo: BookingRepositoryPort = Depends(repo_dep)):
+def get_bookings(
+    id_filter: str = Depends(get_id_filter),
+    name:  Optional[str] = Query(None),
+    bookingId: Optional[str] = Query(None),
+    email: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    checkin: Optional[date] = Query(None),
+    checkout: Optional[date] = Query(None),
+    repo: BookingRepositoryPort = Depends(repo_dep)):
     try:
-        bookings = repo.get_bookings(id_filter)
+        print(email)
+        bookings = repo.get_bookings(id_filter, name, bookingId, email, status, checkin, checkout)
         return bookings
     except Exception as e:
         raise HTTPException(
@@ -78,11 +91,34 @@ def get_bookings(id_filter: str = Depends(get_id_filter), repo: BookingRepositor
 @router.get("/ping")
 def health_check():
     return "pong"
-#
-#@router.post("/debug_header")
-#def debug_header(request: Request):
-#    return {
-#        "headers": dict(
-#            request.headers
-#        )
-#    }
+
+@router.patch("/update/{booking_id}")
+def update_booking(
+    booking_id: str,
+    status: UpdateBookingStatusRequest,
+    hotelId: str = Depends(get_current_hotel_id),
+    repo: BookingRepositoryPort = Depends(repo_dep)
+):
+    try:
+        reserva = repo.update_booking_status(booking_id, status.status, hotelId)
+        return reserva
+    except BookingNotExist:
+        raise HTTPException(
+            404,
+            "Reserva no encontrada"
+        )
+    except RoomNotExist:
+        raise HTTPException(
+            404,
+            "Habitacion no encontrada"
+        )
+    except NotAuthorized:
+        raise HTTPException(
+            403,
+            "No autorizado para modificar esta reserva"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Servicio caido: {str(e)}"
+        )
