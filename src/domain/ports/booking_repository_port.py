@@ -19,6 +19,23 @@ class BookingRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def get_bookings(self, id_filter: str) -> list[VerReservas]:
+    def get_bookings(self, 
+        id_filter: str,
+        name:  Optional[str] = None,
+        bookingId: Optional[str] = None,
+        email: Optional[str] = None,
+        status: Optional[str] = None,
+        checkin: Optional[date] = None,
+        checkout: Optional[date] = None,
+        ) -> list[VerReservas]:
         """Return a list of booking"""
+        pass
+
+    @abstractmethod
+    def update_booking_status(self,
+        bookingId: str,
+        status: str,
+        hotelId: str
+    ) -> Reserva:
+        """Update a booking request for the hotel"""
         pass

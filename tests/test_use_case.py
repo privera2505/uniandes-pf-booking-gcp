@@ -4,6 +4,7 @@ from datetime import date
 from adapters.memory.booking_repository_memory import InMemoryBookingRepositoryAdapter
 from domain.use_cases.booking_room_use_case import BookingRoomUseCase
 from domain.use_cases.reviews_hotel_use_case import ReviewsHotelUseCase
+from domain.use_cases.update_booking_status_use_case import UpdateBookingStatusUseCase
 
 def test_booking_use_case():
     repo = InMemoryBookingRepositoryAdapter()
@@ -52,3 +53,17 @@ def test_reviews_hotels():
     assert "hotelId" in first
     assert "calificacion" in first
     assert first["hotelId"] == hotel_id
+
+def test_update_booking():
+    repo = InMemoryBookingRepositoryAdapter()
+    uc = UpdateBookingStatusUseCase(repo)
+
+    bookingId = "33333333-3333-3333-3333-000000000001"
+    hotel_id = "11111111-1111-1111-1111-000000000011"
+    status = "pendiente"
+
+    reserva = uc.execute(bookingId=bookingId, status=status, hotelId=hotel_id)
+
+    assert reserva is not None
+    assert isinstance(reserva, dict)
+    assert reserva["estado"] == status.upper()

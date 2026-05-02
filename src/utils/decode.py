@@ -29,3 +29,24 @@ async def get_id_filter(request: Request):
         return payload["hotel_id"]
 
     return payload["sub"]
+
+async def get_current_hotel_id(request: Request):
+    data = request.headers.get("x-apigateway-api-userinfo")
+
+    if not data:
+        raise HTTPException(
+            status_code=401,
+            detail="No autenticado"
+        )
+
+    payload = decode_gateway_userinfo(data)
+
+    hotel_id = payload.get("hotel_id")
+
+    if not hotel_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Acción no autorizada: se requiere rol de hotel"
+        )
+
+    return hotel_id

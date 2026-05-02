@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from domain.models.models import Resena, Tarifa, Reserva, Habitacion, Hotel, VerReservas
 from domain.ports.booking_repository_port import BookingRepositoryPort
-from error import RateNotAvailableException, ReservationDuplicated, RoomAlreadyBooked, RoomNotExist, UserNotExist, MaxGuestsExceededException
+from error import BookingNotExist, NotAuthorized, RateNotAvailableException, ReservationDuplicated, RoomAlreadyBooked, RoomNotExist, UserNotExist, MaxGuestsExceededException
 from utils.reservation_code import generate_reservation_code
 
 class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
@@ -143,10 +143,12 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
 
         self._viajero: Dict[str, dict] = {
             "17a4ed9d-f7f9-4862-890a-5ff9d736334f": {
-                "nombre": "test-1"
+                "nombre": "test-1",
+                "correo":"test@correo.com"
             },
             "44444444-4444-4444-4444-000000000002": {
-                "nombre": "test-1"
+                "nombre": "test-1",
+                "correo":"test@correo.com"
             }
         }
 
@@ -229,8 +231,16 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
                 reviews_for_hotel.append(resena)
         return reviews_for_hotel
     
-    def get_bookings(self, id_filter) -> list[VerReservas]:
-        print(self._reserva)
+    def get_bookings(
+        self,
+        id_filter,
+        name=None,
+        bookingId=None,
+        email=None,
+        status=None,
+        checkin=None,
+        checkout=None
+        ) -> list[VerReservas]:
         resultado = []
         for reserva in self._reserva.values():
 
@@ -254,8 +264,29 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
                 {"nombre": "Sin nombre"}
             )
 
+            # filtro adicionales opcionales
+
+            if bookingId and reserva["id"] != bookingId:
+                continue
+
+            if name and name.lower() not in viajero["nombre"].lower():
+                continue
+
+            if email and email.lower()!= viajero["correo"].lower():
+                continue
+
+            if status and reserva["estado"] != status.upper():
+                continue
+
+            if checkin and reserva["fechaCheckIn"] != checkin:
+                continue
+
+            if checkout and reserva["fechaCheckOut"] != checkout:
+                continue
+
             item = VerReservas(
                 id=reserva["id"],
+                habitacionId= reserva["habitacionId"],
                 nombreUser=viajero["nombre"],
                 descripcion=habitacion["descripcion"],
                 numHuespedes=reserva["numHuespedes"],
@@ -288,3 +319,19 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
             resultado.append(item)
 
         return resultado
+    
+    def update_booking_status(self, bookingId, status, hotelId):
+        reserva = self._reserva.get(bookingId)
+        if not reserva:
+            raise BookingNotExist()
+        
+        habitacion = self._habitacion.get(reserva["habitacionId"])
+        if not habitacion:
+            raise RoomNotExist()
+        
+        if habitacion["hotelId"] != hotelId:
+            raise NotAuthorized()
+        
+        reserva["estado"] = status.upper()
+
+        return reserva
