@@ -21,6 +21,7 @@ class BookingRepositoryPort(ABC):
     @abstractmethod
     def get_bookings(self, 
         id_filter: str,
+        moneda: str,
         name:  Optional[str] = None,
         bookingId: Optional[str] = None,
         email: Optional[str] = None,
@@ -35,7 +36,8 @@ class BookingRepositoryPort(ABC):
     def update_booking_status(self,
         bookingId: str,
         status: str,
-        hotelId: str
+        hotelId: Optional[str],
+        userId: Optional[str]
     ) -> Reserva:
         """Update a booking request for the hotel"""
         pass

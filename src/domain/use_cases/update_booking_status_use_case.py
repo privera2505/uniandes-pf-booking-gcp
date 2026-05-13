@@ -3,6 +3,8 @@ from domain.use_cases.base_use_case import BaseUseCase
 
 from domain.models.models import Reserva
 
+from typing import Optional
+
 class UpdateBookingStatusUseCase(BaseUseCase):
     """Use case for Reviews for a Hotel"""
 
@@ -13,5 +15,6 @@ class UpdateBookingStatusUseCase(BaseUseCase):
         self,         
         bookingId: str,
         status: str,
-        hotelId: str) -> Reserva:
-        return self.booking_repository.update_booking_status(bookingId, status, hotelId)
+        hotelId: Optional[str],
+        userId: Optional[str]) -> Reserva:
+        return self.booking_repository.update_booking_status(bookingId, status, hotelId, userId)

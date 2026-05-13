@@ -3,14 +3,16 @@ from adapters.postgres.declarative_base import db1
 from domain.ports.booking_repository_port import BookingRepositoryPort
 from domain.models.models import Reserva, Resena, VerReservas
 
+from datetime import datetime, timezone
+
 from sqlalchemy import and_, func, select, exists, or_, cast, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from math import ceil
 
 from adapters.postgres.models.models import Habitacion, Reserva as ReservaSQL, Tarifa, Resena as ResenaSQL, Hotel, User
-from error import BookingNotExist, MaxGuestsExceededException, NotAuthorized, RateNotAvailableException, ReservationDuplicated, RoomAlreadyBooked, RoomNotExist
-from utils.to_utc import to_utc
+from error import BookingNotExist, MaxGuestsExceededException, NotAuthorized, RateNotAvailableException, RefundNotAllowed, ReservationDuplicated, RoomAlreadyBooked, RoomNotExist
+from utils.currency_converter import convert_price
 from utils.reservation_code import generate_reservation_code
 
 class InBdBookingRepositoryAdapter(BookingRepositoryPort):
@@ -150,6 +152,7 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
     def get_bookings(
             self,
             id_filter,
+            moneda,
             name=None,
             bookingId=None,
             email=None,
@@ -211,47 +214,56 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
 
             rows = query.all()
 
-            return [
-                VerReservas(
-                    id=reserva.id,
-                    habitacionId=reserva.habitacionId,
-                    nombreUser=nombre_user or "Sin nombre",
-                    descripcion=habitacion.descripcion,
-                    numHuespedes=reserva.numHuespedes,
-                    fechaCheckIn=reserva.fechaCheckIn,
-                    fechaCheckOut=reserva.fechaCheckOut,
-                    estado=reserva.estado,
-                    subtotal=reserva.subtotal,
-                    impuestos=reserva.impuestos,
-                    total=reserva.total,
+            reservas: list[VerReservas]  = []
 
-                    nombreHotel=hotel.nombre,
-                    direccion=hotel.direccion,
-                    ciudad=hotel.ciudad,
-                    pais=hotel.pais,
-                    latitud=hotel.latitud,
-                    longitud=hotel.longitud,
-                    estrellas=hotel.estrellas,
-                    distancia=hotel.distancia,
-                    acceso=hotel.acceso,
+            for reserva, habitacion, hotel, nombre_user, _ in rows:
+                subtotal_curr_query = convert_price(reserva.subtotal, reserva.moneda, moneda)
+                impuestos_curr_query = convert_price(reserva.impuestos, reserva.moneda, moneda)
+                total_curr_query = convert_price(reserva.total, reserva.moneda, moneda)
+                reservas.append(
+                    VerReservas(
+                        id=reserva.id,
+                        habitacionId=reserva.habitacionId,
+                        nombreUser=nombre_user or "Sin nombre",
+                        descripcion=habitacion.descripcion,
+                        numHuespedes=reserva.numHuespedes,
+                        fechaCheckIn=reserva.fechaCheckIn,
+                        fechaCheckOut=reserva.fechaCheckOut,
+                        estado=reserva.estado,
+                        subtotal=subtotal_curr_query,
+                        impuestos=impuestos_curr_query,
+                        total=total_curr_query,
+                        moneda=moneda,
 
-                    tipo=habitacion.tipo,
-                    categoria=habitacion.categoria,
-                    imagenes=habitacion.imagenes,
-                    tipo_habitacion=habitacion.tipo_habitacion,
-                    tipo_cama=habitacion.tipo_cama,
-                    tamano_habitacion=habitacion.tamano_habitacion,
-                    amenidades=habitacion.amenidades
+                        nombreHotel=hotel.nombre,
+                        direccion=hotel.direccion,
+                        ciudad=hotel.ciudad,
+                        pais=hotel.pais,
+                        latitud=hotel.latitud,
+                        longitud=hotel.longitud,
+                        estrellas=hotel.estrellas,
+                        distancia=hotel.distancia,
+                        acceso=hotel.acceso,
+
+                        tipo=habitacion.tipo,
+                        categoria=habitacion.categoria,
+                        imagenes=habitacion.imagenes,
+                        tipo_habitacion=habitacion.tipo_habitacion,
+                        tipo_cama=habitacion.tipo_cama,
+                        tamano_habitacion=habitacion.tamano_habitacion,
+                        amenidades=habitacion.amenidades
+                    )
                 )
-                for reserva, habitacion, hotel, nombre_user, _ in rows
-            ]
+
+
+            return reservas
 
         finally:
             db.close()
 
-    def update_booking_status(self, bookingId, status, hotelId) -> Reserva:
+    def update_booking_status(self, bookingId, status, hotelId, userId) -> Reserva:
         db = db1.get_session()
-
+        estado = status.upper()
         try:
             # 1. Buscar reserva
             reserva = (
@@ -273,31 +285,42 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
             if not habitacion:
                 raise RoomNotExist()
 
-            # 3. Validar que pertenece al hotel
-            if habitacion.hotelId != hotelId:
+            # 3. Validar permisos
+            if hotelId == None:
+                if (reserva.viajeroId != userId or estado != "CANCELADA"):
+                    raise NotAuthorized()
+            elif habitacion.hotelId != hotelId:
                 raise NotAuthorized()
 
             # 5. Actualizar estado
-            reserva.estado = status.upper()
+            if estado == "CANCELADA" and reserva.estado == "PAGADA":
+                if reserva.fechaCheckIn > datetime.now(timezone.utc) or hotelId:
+                    reserva.estado = "REEMBOLSANDO"
+                else:
+                    raise RefundNotAllowed()
+            elif estado == "CONFIRMADA" and reserva.estado == "PAGADA":
+                reserva.estado = reserva.estado
+            else:
+                reserva.estado = estado
 
             db.commit()
             db.refresh(reserva)
 
             # 6. Mapear a modelo de dominio
-            return Reserva(
-                id=reserva.id,
-                codigo=reserva.codigo,
-                viajeroId=reserva.viajeroId,
-                habitacionId=reserva.habitacionId,
-                fechaCheckIn=reserva.fechaCheckIn,
-                fechaCheckOut=reserva.fechaCheckOut,
-                numHuespedes=reserva.numHuespedes,
-                estado=reserva.estado,
-                subtotal=reserva.subtotal,
-                impuestos=reserva.impuestos,
-                total=reserva.total,
-                moneda=reserva.moneda
-            )
+            return {
+                "id": reserva.id,
+                "codigo": reserva.codigo,
+                "viajeroId": reserva.viajeroId,
+                "habitacionId": reserva.habitacionId,
+                "fechaCheckIn": reserva.fechaCheckIn,
+                "fechaCheckOut": reserva.fechaCheckOut,
+                "numHuespedes": reserva.numHuespedes,
+                "estado": reserva.estado,
+                "subtotal": reserva.subtotal,
+                "impuestos": reserva.impuestos,
+                "total": reserva.total,
+                "moneda": reserva.moneda
+            }
 
         except Exception:
             db.rollback()

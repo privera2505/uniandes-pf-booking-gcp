@@ -42,11 +42,5 @@ async def get_current_hotel_id(request: Request):
     payload = decode_gateway_userinfo(data)
 
     hotel_id = payload.get("hotel_id")
-
-    if not hotel_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Acción no autorizada: se requiere rol de hotel"
-        )
-
+    
     return hotel_id

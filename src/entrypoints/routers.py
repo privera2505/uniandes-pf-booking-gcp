@@ -3,7 +3,7 @@ from datetime import date
 
 from typing import Optional
 
-from domain.models.models import Reserva, BookingRequest, ReviewsRequest, Resena, UpdateBookingStatusRequest
+from domain.models.models import Reserva, BookingRequest, ReviewsRequest, Resena, UpdateBookingStatusRequest, Currency
 from domain.ports.booking_repository_port import BookingRepositoryPort
 
 from error import (
@@ -13,14 +13,19 @@ from error import (
     MaxGuestsExceededException,
     NotAuthorized,
     RateNotAvailableException,
+    RefundNotAllowed,
     ReservationDuplicated,
     RoomAlreadyBooked,
     RoomNotExist,
     UserNotExist
     )
 
+import json
+
 from entrypoints.assembly import build_booking_repository
+from utils.currency_check import currency_dep
 from utils.decode import get_current_user_id, get_id_filter, get_current_hotel_id
+from utils.kakfa_producer import publish_sync_command
 
 
 def repo_dep() -> BookingRepositoryPort:
@@ -71,6 +76,7 @@ def reviews_hotel(hotelId: str, repo: BookingRepositoryPort = Depends(repo_dep))
 @router.get("/get_bookings")
 def get_bookings(
     id_filter: str = Depends(get_id_filter),
+    moneda: Currency = Depends(currency_dep),
     name:  Optional[str] = Query(None),
     bookingId: Optional[str] = Query(None),
     email: Optional[str] = Query(None),
@@ -80,7 +86,7 @@ def get_bookings(
     repo: BookingRepositoryPort = Depends(repo_dep)):
     try:
         print(email)
-        bookings = repo.get_bookings(id_filter, name, bookingId, email, status, checkin, checkout)
+        bookings = repo.get_bookings(id_filter, moneda, name, bookingId, email, status, checkin, checkout)
         return bookings
     except Exception as e:
         raise HTTPException(
@@ -97,10 +103,15 @@ def update_booking(
     booking_id: str,
     status: UpdateBookingStatusRequest,
     hotelId: str = Depends(get_current_hotel_id),
+    userId: str = Depends(get_current_user_id),
     repo: BookingRepositoryPort = Depends(repo_dep)
 ):
     try:
-        reserva = repo.update_booking_status(booking_id, status.status, hotelId)
+        print(hotelId)
+        print(userId)
+        reserva: Reserva = repo.update_booking_status(booking_id, status.status, hotelId, userId)
+        if reserva["estado"] == "REEMBOLSANDO":
+            process_event_and_publish(reserva)
         return reserva
     except BookingNotExist:
         raise HTTPException(
@@ -117,8 +128,16 @@ def update_booking(
             403,
             "No autorizado para modificar esta reserva"
         )
+    except RefundNotAllowed:
+        raise HTTPException(
+            400,
+            "No se puede solicitar reembolso el día del check-in ni después"
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Servicio caido: {str(e)}"
         )
+
+def process_event_and_publish(reserva: Reserva):
+    publish_sync_command(reserva["id"], json.dumps(reserva, default=str))
