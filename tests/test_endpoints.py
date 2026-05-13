@@ -283,3 +283,4 @@ def test_get_bookings(client: client):
     assert get.status_code == 200
     data = get.json()
     assert isinstance(data, list)
+
