@@ -12,6 +12,7 @@ cffi==2.0.0
 charset-normalizer==3.4.7
 click==8.3.2
 cloud-sql-python-connector==1.20.1
+confluent-kafka==2.14.0
 coverage==7.13.5
 cryptography==46.0.7
 dnspython==2.8.0

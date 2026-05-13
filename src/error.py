@@ -37,3 +37,7 @@ class ReservationDuplicated(Exception):
 class NotAuthorized(Exception):
     """Exception raise when you dont have permission to modified a booking"""
     pass
+
+class RefundNotAllowed(Exception):
+    """Exception raise when you the refund is not allowed"""
+    pass

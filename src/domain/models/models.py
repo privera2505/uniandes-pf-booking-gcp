@@ -2,6 +2,13 @@ from pydantic import BaseModel
 
 from datetime import datetime
 
+from enum import Enum
+
+class Currency(str, Enum):
+    EUR = "EUR"
+    USD = "USD"
+    COP = "COP"
+
 class Reserva(BaseModel):
     id: str | None = None
     codigo: str
@@ -58,6 +65,7 @@ class VerReservas(BaseModel):
     subtotal: float
     impuestos: float
     total: float
+    moneda: str
 
 class Users(BaseModel):
     id: str

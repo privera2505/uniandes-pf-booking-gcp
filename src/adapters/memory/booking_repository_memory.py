@@ -4,7 +4,8 @@ from uuid import uuid4
 
 from domain.models.models import Resena, Tarifa, Reserva, Habitacion, Hotel, VerReservas
 from domain.ports.booking_repository_port import BookingRepositoryPort
-from error import BookingNotExist, NotAuthorized, RateNotAvailableException, ReservationDuplicated, RoomAlreadyBooked, RoomNotExist, UserNotExist, MaxGuestsExceededException
+from error import BookingNotExist, NotAuthorized, RateNotAvailableException, RefundNotAllowed, ReservationDuplicated, RoomAlreadyBooked, RoomNotExist, UserNotExist, MaxGuestsExceededException
+from utils.currency_converter import convert_price
 from utils.reservation_code import generate_reservation_code
 
 class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
@@ -220,7 +221,6 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
 
         # Guardar en memoria
         self._reserva[nueva_reserva["id"]] = nueva_reserva
-        print(self._reserva)
 
         return nueva_reserva
 
@@ -234,6 +234,7 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
     def get_bookings(
         self,
         id_filter,
+        moneda,
         name=None,
         bookingId=None,
         email=None,
@@ -284,6 +285,10 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
             if checkout and reserva["fechaCheckOut"] != checkout:
                 continue
 
+            subtotal_curr_query = convert_price(reserva["subtotal"], reserva["moneda"], moneda)
+            impuestos_curr_query = convert_price(reserva["impuestos"], reserva["moneda"], moneda)
+            total_curr_query = convert_price(reserva["total"], reserva["moneda"], moneda)
+
             item = VerReservas(
                 id=reserva["id"],
                 habitacionId= reserva["habitacionId"],
@@ -293,9 +298,10 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
                 fechaCheckIn=reserva["fechaCheckIn"],
                 fechaCheckOut=reserva["fechaCheckOut"],
                 estado=reserva["estado"],
-                subtotal=reserva["subtotal"],
-                impuestos=reserva["impuestos"],
-                total=reserva["total"],
+                subtotal=subtotal_curr_query,
+                impuestos=impuestos_curr_query,
+                total=total_curr_query,
+                moneda=moneda,
 
                 nombreHotel=hotel["nombre"],
                 direccion=hotel["direccion"],
@@ -320,8 +326,9 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
 
         return resultado
     
-    def update_booking_status(self, bookingId, status, hotelId):
+    def update_booking_status(self, bookingId, status, hotelId, userId):
         reserva = self._reserva.get(bookingId)
+        estado = status.upper()
         if not reserva:
             raise BookingNotExist()
         
@@ -329,9 +336,20 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
         if not habitacion:
             raise RoomNotExist()
         
-        if habitacion["hotelId"] != hotelId:
+        if hotelId == None:
+            if (reserva["viajeroId"] != userId or estado != "CANCELADA"):
+                raise NotAuthorized()
+        elif habitacion["hotelId"] != hotelId:
             raise NotAuthorized()
-        
-        reserva["estado"] = status.upper()
+
+        if estado == "CANCELADA" and reserva["estado"] == "PAGADA":
+            if reserva["fechaCheckIn"] > date.today() or hotelId:
+                reserva["estado"] = "REEMBOLSANDO"
+            else:
+                raise RefundNotAllowed()
+        elif estado == "CONFIRMADA" and reserva["estado"] == "PAGADA":
+            reserva["estado"] = reserva["estado"]
+        else:
+            reserva["estado"] = status.upper()
 
         return reserva

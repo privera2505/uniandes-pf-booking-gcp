@@ -16,6 +16,7 @@ class GetBookingsUseCase(BaseUseCase):
     def execute(
             self, 
             id_filter: str,
+            moneda: str,
             name:  Optional[str] = None,
             bookingId: Optional[str] = None,
             email: Optional[str] = None,
@@ -23,4 +24,4 @@ class GetBookingsUseCase(BaseUseCase):
             checkin: Optional[date] = None,
             checkout: Optional[date] = None
             ) -> list[VerReservas]:
-        return self.booking_repository.get_bookings(id_filter, name, bookingId, email, status, checkin, checkout)
+        return self.booking_repository.get_bookings(id_filter, moneda, name, bookingId, email, status, checkin, checkout)
