@@ -26,6 +26,7 @@ from entrypoints.assembly import build_booking_repository
 from utils.currency_check import currency_dep
 from utils.decode import get_current_user_id, get_id_filter, get_current_hotel_id
 from utils.kakfa_producer import publish_sync_command
+from utils.send_notification import NotificationClient
 
 
 def repo_dep() -> BookingRepositoryPort:
@@ -85,9 +86,13 @@ def get_bookings(
     checkout: Optional[date] = Query(None),
     repo: BookingRepositoryPort = Depends(repo_dep)):
     try:
-        print(email)
         bookings = repo.get_bookings(id_filter, moneda, name, bookingId, email, status, checkin, checkout)
-        return bookings
+        reservas_ordenadas = sorted(
+            bookings,
+            key=lambda r: r.fechaCheckIn,
+            reverse=False
+        )
+        return reservas_ordenadas
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -107,11 +112,13 @@ def update_booking(
     repo: BookingRepositoryPort = Depends(repo_dep)
 ):
     try:
-        print(hotelId)
-        print(userId)
         reserva: Reserva = repo.update_booking_status(booking_id, status.status, hotelId, userId)
         if reserva["estado"] == "REEMBOLSANDO":
             process_event_and_publish(reserva)
+        if reserva["estado"] == "CONFIRMADA" or reserva["estado"] == "CANCELADA":
+            send_notification(reserva["id"],
+                            reserva["estado"],
+                            reserva)
         return reserva
     except BookingNotExist:
         raise HTTPException(
@@ -141,3 +148,17 @@ def update_booking(
 
 def process_event_and_publish(reserva: Reserva):
     publish_sync_command(reserva["id"], json.dumps(reserva, default=str))
+
+def send_notification(id, estado, reserva):
+    if estado == "CONFIRMADA":
+        n_movil = "CONFIRMED"
+        n_email = "booking.confirmed"
+    elif estado == "CANCELADA":
+        n_movil = "CANCELED"
+        n_email = "booking.cancelled"
+    notification_client = NotificationClient()
+    notification_client.send_notification(
+        id,
+        n_movil
+    )
+    print(notification_client.send_notification_email(n_email, reserva))

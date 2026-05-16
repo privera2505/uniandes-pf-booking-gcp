@@ -351,5 +351,10 @@ class InMemoryBookingRepositoryAdapter(BookingRepositoryPort):
             reserva["estado"] = reserva["estado"]
         else:
             reserva["estado"] = status.upper()
+        
+        hotel = self._hotel.get(habitacion["hotelId"])
+
+        reserva["hotel_name"] = hotel["nombre"]
+        reserva["room_type"] = habitacion["tipo"]
 
         return reserva

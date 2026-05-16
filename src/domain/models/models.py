@@ -23,6 +23,22 @@ class Reserva(BaseModel):
     total: float
     moneda: str
 
+class UpdateReserva(BaseModel):
+    id: str | None = None
+    codigo: str
+    viajeroId: str
+    habitacionId: str
+    fechaCheckIn: datetime
+    fechaCheckOut: datetime
+    numHuespedes: int
+    estado: str
+    subtotal: float
+    impuestos: float
+    total: float
+    moneda: str
+    hotel_name: str | None = None
+    room_type: str | None = None
+
 class Hotel(BaseModel):
     id: str | None = None
     nombre: str
