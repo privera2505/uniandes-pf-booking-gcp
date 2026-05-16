@@ -90,3 +90,5 @@ class NotificationClient:
                 f"Error enviando email notification "
                 f"(booking_id={reserva['id']}, event_type={status}): {e}"
             )
+
+            
