@@ -291,6 +291,12 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                     raise NotAuthorized()
             elif habitacion.hotelId != hotelId:
                 raise NotAuthorized()
+            
+            hotel = (
+                db.query(Hotel)
+                .filter(Hotel.id == habitacion.hotelId)
+                .first()
+            )
 
             # 5. Actualizar estado
             if estado == "CANCELADA" and reserva.estado == "PAGADA":
@@ -298,7 +304,7 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                     reserva.estado = "REEMBOLSANDO"
                 else:
                     raise RefundNotAllowed()
-            elif estado == "CONFIRMADA" and reserva.estado == "PAGADA":
+            elif (estado == "CONFIRMADA" and reserva.estado == "PAGADA"):
                 reserva.estado = reserva.estado
             else:
                 reserva.estado = estado
@@ -319,7 +325,9 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                 "subtotal": reserva.subtotal,
                 "impuestos": reserva.impuestos,
                 "total": reserva.total,
-                "moneda": reserva.moneda
+                "moneda": reserva.moneda,
+                "hotel_name": hotel.nombre,
+                "room_type": habitacion.tipo
             }
 
         except Exception:
