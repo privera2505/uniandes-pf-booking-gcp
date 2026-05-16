@@ -115,7 +115,7 @@ def update_booking(
         reserva: Reserva = repo.update_booking_status(booking_id, status.status, hotelId, userId)
         if reserva["estado"] == "REEMBOLSANDO":
             process_event_and_publish(reserva)
-        if reserva["estado"] == "CONFIRMADA" or reserva["estado"] == "CANCELADA":
+        if reserva["estado"] == "CONFIRMADA" or reserva["estado"] == "CANCELADA" or reserva["estado"] == "REEMBOLSANDO":
             send_notification(reserva["id"],
                             reserva["estado"],
                             reserva)
@@ -153,7 +153,7 @@ def send_notification(id, estado, reserva):
     if estado == "CONFIRMADA":
         n_movil = "CONFIRMED"
         n_email = "booking.confirmed"
-    elif estado == "CANCELADA":
+    elif estado == "CANCELADA" or estado == "REEMBOLSANDO":
         n_movil = "CANCELED"
         n_email = "booking.cancelled"
     notification_client = NotificationClient()
