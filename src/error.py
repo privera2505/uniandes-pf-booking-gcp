@@ -10,6 +10,10 @@ class RoomNotExist(Exception):
     """Exception raise when the room not exist."""
     pass
 
+class BookingNotExist(Exception):
+    """Exception raise when the booking not exist"""
+    pass
+
 class UserNotExist(Exception):
     """Exception raise when the user not exist."""
     pass
@@ -28,4 +32,12 @@ class RateNotAvailableException(Exception):
 
 class ReservationDuplicated(Exception):
     """Exception raise when the Revation was duplicated"""
+    pass
+
+class NotAuthorized(Exception):
+    """Exception raise when you dont have permission to modified a booking"""
+    pass
+
+class RefundNotAllowed(Exception):
+    """Exception raise when you the refund is not allowed"""
     pass

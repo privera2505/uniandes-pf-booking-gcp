@@ -1,6 +1,6 @@
 from os import getenv
 
-REPOSITORY_IMPL = getenv("REPOSITORY_IMPL", "postgres")
+REPOSITORY_IMPL = getenv("REPOSITORY_IMPL", "memory")
 APP_HOST = getenv("APP_HOST", "0.0.0.0")
 APP_PORT = getenv("APP_PORT", "8000")
 INSTANCE_CONNECTION_NAME = getenv("INSTANCE_CONNECTION_NAME","secret-lambda-491419-p2:us-central1:test-search-services")
@@ -11,3 +11,9 @@ DB_NAME = getenv("DB_NAME","postgres")
 DB_PASSWORD = getenv("DB_PASSWORD","Postgres1.")
 ENVIRONMENT = getenv("ENVIRONMENT", "dev")
 ALLOWED_ORIGINS = getenv("ALLOWED_ORIGINS", "*").split()
+KAFKA_BOOTSTRAP_SERVERS = getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+KAFKA_TOPIC_PMS_SYNC = getenv("KAFKA_TOPIC_PMS_SYNC", "cancel_booking_queue")
+KAFKA_ENABLED = getenv("KAFKA_ENABLED", True)
+SERVICE_NAME = getenv("SERVICE_NAME", "booking_service")
+NOTIFICATION_SERVICE_URL = getenv("NOTIFICATION_SERVICE_URL", "https://notification-services-154299161799.us-central1.run.app")
+INTERNAL_TOKEN = getenv("INTERNAL_TOKEN", "dev-internal-notify-token-travelhub-2026")

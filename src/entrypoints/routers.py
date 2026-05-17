@@ -1,22 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from datetime import date
 
-from domain.models.models import Reserva, BookingRequest, ReviewsRequest, Resena
+from typing import Optional
+
+from domain.models.models import Reserva, BookingRequest, ReviewsRequest, Resena, UpdateBookingStatusRequest, Currency
 from domain.ports.booking_repository_port import BookingRepositoryPort
 
 from error import (
+    BookingNotExist,
     InvalidDateRangeException,
     BookingDateValidationException,
     MaxGuestsExceededException,
+    NotAuthorized,
     RateNotAvailableException,
+    RefundNotAllowed,
     ReservationDuplicated,
     RoomAlreadyBooked,
     RoomNotExist,
     UserNotExist
     )
 
+import json
+
 from entrypoints.assembly import build_booking_repository
-from utils.decode import get_current_user_id
+from utils.currency_check import currency_dep
+from utils.decode import get_current_user_id, get_id_filter, get_current_hotel_id
+from utils.kakfa_producer import publish_sync_command
+from utils.send_notification import NotificationClient
 
 
 def repo_dep() -> BookingRepositoryPort:
@@ -61,17 +71,94 @@ def reviews_hotel(hotelId: str, repo: BookingRepositoryPort = Depends(repo_dep))
     try:
         query = repo.reviews_hotel(hotelId)
         return query
-    except: 
-        pass
+    except Exception:
+        raise HTTPException(500, "Servicio caido")
+
+@router.get("/get_bookings")
+def get_bookings(
+    id_filter: str = Depends(get_id_filter),
+    moneda: Currency = Depends(currency_dep),
+    name:  Optional[str] = Query(None),
+    bookingId: Optional[str] = Query(None),
+    email: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    checkin: Optional[date] = Query(None),
+    checkout: Optional[date] = Query(None),
+    repo: BookingRepositoryPort = Depends(repo_dep)):
+    try:
+        bookings = repo.get_bookings(id_filter, moneda, name, bookingId, email, status, checkin, checkout)
+        reservas_ordenadas = sorted(
+            bookings,
+            key=lambda r: r.fechaCheckIn,
+            reverse=False
+        )
+        return reservas_ordenadas
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Servicio caido: {str(e)}"
+        )
 
 @router.get("/ping")
 def health_check():
     return "pong"
-#
-#@router.post("/debug_header")
-#def debug_header(request: Request):
-#    return {
-#        "headers": dict(
-#            request.headers
-#        )
-#    }
+
+@router.patch("/update/{booking_id}")
+def update_booking(
+    booking_id: str,
+    status: UpdateBookingStatusRequest,
+    hotelId: str = Depends(get_current_hotel_id),
+    userId: str = Depends(get_current_user_id),
+    repo: BookingRepositoryPort = Depends(repo_dep)
+):
+    try:
+        reserva: Reserva = repo.update_booking_status(booking_id, status.status, hotelId, userId)
+        if reserva["estado"] == "REEMBOLSANDO":
+            process_event_and_publish(reserva)
+        if reserva["estado"] == "CONFIRMADA" or reserva["estado"] == "CANCELADA" or reserva["estado"] == "REEMBOLSANDO":
+            send_notification(reserva["id"],
+                            reserva["estado"],
+                            reserva)
+        return reserva
+    except BookingNotExist:
+        raise HTTPException(
+            404,
+            "Reserva no encontrada"
+        )
+    except RoomNotExist:
+        raise HTTPException(
+            404,
+            "Habitacion no encontrada"
+        )
+    except NotAuthorized:
+        raise HTTPException(
+            403,
+            "No autorizado para modificar esta reserva"
+        )
+    except RefundNotAllowed:
+        raise HTTPException(
+            400,
+            "No se puede solicitar reembolso el día del check-in ni después"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Servicio caido: {str(e)}"
+        )
+
+def process_event_and_publish(reserva: Reserva):
+    publish_sync_command(reserva["id"], json.dumps(reserva, default=str))
+
+def send_notification(id, estado, reserva):
+    if estado == "CONFIRMADA":
+        n_movil = "CONFIRMED"
+        n_email = "booking.confirmed"
+    elif estado == "CANCELADA" or estado == "REEMBOLSANDO":
+        n_movil = "CANCELED"
+        n_email = "booking.cancelled"
+    notification_client = NotificationClient()
+    notification_client.send_notification(
+        id,
+        n_movil
+    )
+    print(notification_client.send_notification_email(n_email, reserva))

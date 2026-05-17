@@ -2,6 +2,13 @@ from pydantic import BaseModel
 
 from datetime import datetime
 
+from enum import Enum
+
+class Currency(str, Enum):
+    EUR = "EUR"
+    USD = "USD"
+    COP = "COP"
+
 class Reserva(BaseModel):
     id: str | None = None
     codigo: str
@@ -15,6 +22,71 @@ class Reserva(BaseModel):
     impuestos: float
     total: float
     moneda: str
+
+class UpdateReserva(BaseModel):
+    id: str | None = None
+    codigo: str
+    viajeroId: str
+    habitacionId: str
+    fechaCheckIn: datetime
+    fechaCheckOut: datetime
+    numHuespedes: int
+    estado: str
+    subtotal: float
+    impuestos: float
+    total: float
+    moneda: str
+    hotel_name: str | None = None
+    room_type: str | None = None
+
+class Hotel(BaseModel):
+    id: str | None = None
+    nombre: str
+    direccion: str
+    ciudad: str
+    pais: str
+    latitud: float
+    longitud: float
+    estrellas: int
+    pmsProveedor: str
+    activo: bool
+    distancia: str
+    acceso: str
+
+class VerReservas(BaseModel):
+    id: str
+    habitacionId: str
+    nombreUser:str
+    descripcion: str
+    numHuespedes: int
+    fechaCheckIn: datetime
+    fechaCheckOut: datetime
+    estado: str
+    nombreHotel: str
+    direccion: str
+    ciudad: str
+    pais: str
+    latitud: float
+    longitud: float
+    estrellas: int
+    distancia: str
+    acceso: str
+    tipo: str
+    categoria: str    
+    imagenes: list[str]
+    tipo_habitacion: str
+    tipo_cama: list[str]
+    tamano_habitacion: str
+    amenidades: list[str]
+    subtotal: float
+    impuestos: float
+    total: float
+    moneda: str
+
+class Users(BaseModel):
+    id: str
+    nombre: str
+    email: str
 
 class Resena(BaseModel):
     id: str | None = None
@@ -54,3 +126,6 @@ class BookingRequest(BaseModel):
 
 class ReviewsRequest(BaseModel):
     hotelId: str
+
+class UpdateBookingStatusRequest(BaseModel):
+    status: str
