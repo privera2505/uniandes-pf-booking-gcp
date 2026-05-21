@@ -65,6 +65,12 @@ def book_room(request: BookingRequest, user_id: str = Depends(get_current_user_i
         raise HTTPException(409, "La solicitud entra en conflicto con estado actual (ocupada).")
     except MaxGuestsExceededException:
         raise HTTPException(422, "NumGuest supera maxGuest")
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Servicio caido: {str(e)}"
+        )
+
 
 @router.get("/reviews_hotel", response_model=list[Resena], status_code=200)
 def reviews_hotel(hotelId: str, repo: BookingRepositoryPort = Depends(repo_dep)):

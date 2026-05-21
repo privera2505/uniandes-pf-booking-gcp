@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID
 
 from math import ceil
 
-from adapters.postgres.models.models import Habitacion, Reserva as ReservaSQL, Tarifa, Resena as ResenaSQL, Hotel, User
+from adapters.postgres.models.models import Habitacion, Reserva as ReservaSQL, Tarifa, Resena as ResenaSQL, Hotel, User, Disponibilidad
 from error import BookingNotExist, MaxGuestsExceededException, NotAuthorized, RateNotAvailableException, RefundNotAllowed, ReservationDuplicated, RoomAlreadyBooked, RoomNotExist
 from utils.currency_converter import convert_price
 from utils.reservation_code import generate_reservation_code
@@ -45,20 +45,23 @@ class InBdBookingRepositoryAdapter(BookingRepositoryPort):
                 raise RoomNotExist()
             
             #Vaidar reservas en fechas
-            reserva_existente = (
-                db.query(ReservaSQL)
+            disponibilidades = (
+                db.query(Disponibilidad)
                 .filter(
-                    ReservaSQL.habitacionId == habitacionId,
-                    ReservaSQL.estado == "CONFIRMADA",
-                    and_(
-                        checkin < ReservaSQL.fechaCheckOut,
-                        checkout > ReservaSQL.fechaCheckIn
-                    )
+                    Disponibilidad.habitacionId == habitacionId,
+                    Disponibilidad.fecha >= checkin,
+                    Disponibilidad.fecha < checkout
                 )
-                .first()
+                .all()
             )
-            if reserva_existente:
+            # Validar que existan todas las noches
+            if len(disponibilidades) != noches:
                 raise RoomAlreadyBooked()
+
+            # Validar unidades disponibles
+            for disponibilidad in disponibilidades:
+                if disponibilidad.unidadesDisponibles <= 0:
+                    raise RoomAlreadyBooked()
             
             #Validar número de huespedes
             if numHuespedes > habitacion.capacidadMaxima:
