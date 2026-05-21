@@ -4,8 +4,10 @@ from datetime import datetime, timezone
 
 from sqlalchemy.dialects.postgresql import UUID
 
-from sqlalchemy import Column, DateTime, String, Float, Integer, Boolean, ForeignKey, JSON, Index
+from sqlalchemy import Column, DateTime, Date, String, Float, Integer, Boolean, ForeignKey, JSON, Index, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 Base = declarative_base()
 
@@ -100,6 +102,11 @@ class Habitacion(Base):
     tamano_habitacion = Column(String, nullable=False)
     amenidades = Column(JSON, nullable=False)
 
+    disponibilidades = relationship(
+        "Disponibilidad",
+        back_populates="habitacion"
+    )
+
     __table_args__ = (
         Index("idx_habitacion_hotel", "hotelId"),
     )
@@ -110,3 +117,33 @@ class User(Base):
     id = Column(UUID(as_uuid=False), primary_key=True)
     nombre = Column(String, nullable=False)
     email = Column(String, nullable=False)
+
+def _new_disponibilidad_id() -> str:
+    return str(uuid.uuid4())
+
+
+class Disponibilidad(Base):
+    __tablename__ = "disponibilidad"
+
+    id = Column(String, primary_key=True, default=_new_disponibilidad_id)
+    habitacionId = Column(
+        "habitacionId", String, ForeignKey("habitacion.id"), nullable=False
+    )
+    fecha = Column(Date, nullable=False)
+    unidadesDisponibles = Column("unidadesDisponibles", Integer, nullable=False, default=0)
+    unidadesReservadas = Column("unidadesReservadas", Integer, nullable=False, default=0)
+    ultimaActualizacion = Column(
+        "ultimaActualizacion",
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    fuenteActualizacion = Column("fuenteActualizacion", String(50), default="pms_webhook")
+
+    habitacion = relationship("Habitacion", back_populates="disponibilidades")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "habitacionId", "fecha", name="uq_disponibilidad_habitacion_fecha"
+        ),
+    )
